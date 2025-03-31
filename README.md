@@ -108,17 +108,48 @@ This inserts a record into:
 
 ---
 
-### 2. List All Customers
+### 2. View the Data in SQL Server
+
+Open your database and query both tables. Observe:
+
+- Customer and Customer_VARCHAR data is stored and encrypted correctly.
+- But note that both values are different.
+
+📸 **Screenshot: Data from both tables in SQL Server**
+
+![Database View](./screenshots/02-database-view.png)
+
+---
+
+### 3. List All Customers
 
 ```bash
 curl http://localhost:8080/customers/all
 ```
 
-✅ You will see two records with the same content. NVARCHAR handles it correctly.
+✅ You will see two records with the different content. NVARCHAR handles it correctly meanwhile VARCHAR does not. This is the first issue of using VARCHAR with unicode content on encrypted columns.
 
+```xml
+<ArrayList>
+    <item>
+        <name>Unicode Test</name>
+        <id>1</id>
+        <type>VARCHAR</type>
+        <ssn>Â´Ã‘ Unicode</ssn>
+    </item>
+    <item>
+        <name>Unicode Test</name>
+        <id>1</id>
+        <type>NVARCHAR</type>
+        <ssn>´Ñ Unicode</ssn>
+    </item>
+</ArrayList>
+```
 ---
 
-### 3. Update the VARCHAR Customer
+### 4. Update the VARCHAR Customer
+
+Note that the only value updated is name, however as far as the update is using JPA, everything is updated and here is where the second issue is generated.
 
 ```bash
 curl -X PATCH http://localhost:8080/customers/varchar \
@@ -128,7 +159,7 @@ curl -X PATCH http://localhost:8080/customers/varchar \
 
 ---
 
-### 4. List All Customers Again
+### 5. List All Customers Again
 
 ```bash
 curl http://localhost:8080/customers/all
@@ -136,11 +167,13 @@ curl http://localhost:8080/customers/all
 
 ❌ You will now get an error when trying to read the `VARCHAR` encrypted value:
 
-```
-Could not extract column [3] from JDBC ResultSet [Specified ciphertext has an invalid authentication tag. ]
+```xml
+<HashMap>
+    <details>Could not extract column [3] from JDBC ResultSet [Specified ciphertext has an invalid authentication tag. ] [n/a]</details>
+    <error>Error retrieving customers</error>
+</HashMap>
 ```
 
-This happens because the update operation encrypted already-corrupted Unicode characters, producing an unreadable ciphertext.
 
 ---
 
@@ -157,6 +190,10 @@ This happens because the update operation encrypted already-corrupted Unicode ch
 │   ├── init-sql/
 │   │   ├── setup.sql.template
 │   │   └── entrypoint.sh
+├── screenshots/
+│   ├── 01-api-insert-result.png
+│   ├── 02-database-view.png
+│   └── 03-error-decryption-failed.png
 ├── docker-compose.yml
 ├── .env               # Not committed
 └── .env.example       # Sample config
@@ -184,8 +221,7 @@ docker-compose logs -f
 
 - The SQL Server image runs an entrypoint script to **inject sensitive values** (like the Key Vault path) into the SQL initialization script using `envsubst`.
 - Spring Boot registers the AKV provider using environment variables at runtime.
-- You can disable AKV initialization by setting this in `application-test.properties` or as an env var:
-
+- You can disable AKV initialization by setting this in `application-test.properties`.
 
 ---
 
